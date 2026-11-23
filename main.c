@@ -1,5 +1,10 @@
 #include "fpcie2com.h"
 
+// Device Class GUID for FPCIE2COM (LOLDrivers: 9543c507-9b10-4de8-89b9-42a4f24c99ec)
+static const GUID GUID_DEVCLASS_FPCIE2COM = {
+    0x9543C507, 0x9B10, 0x4DE8, { 0x89, 0xB9, 0x42, 0xA4, 0xF2, 0x4C, 0x99, 0xEC }
+};
+
 static LONG g_DeviceCounter = 0;
 
 NTSTATUS FpcieCreateClose(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
@@ -28,12 +33,14 @@ NTSTATUS FpciePnpDispatch(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
 
         if (DevExt->LowerDeviceObject) {
             IoDetachDevice(DevExt->LowerDeviceObject);
+            DevExt->LowerDeviceObject = NULL;
         }
 
         if (DevExt->DeviceName.Buffer) {
             RtlFreeUnicodeString(&DevExt->DeviceName);
         }
 
+        // FIX: Unconditionally delete device object to prevent resource leak
         IoDeleteDevice(DeviceObject);
 
         Irp->IoStatus.Status = STATUS_SUCCESS;
@@ -215,19 +222,26 @@ NTSTATUS FpcieAddDevice(IN PDRIVER_OBJECT DriverObject, IN PDEVICE_OBJECT Physic
     WCHAR SymlinkBuffer[64];
     UNICODE_STRING DeviceName;
     UNICODE_STRING SymlinkName;
+    UNICODE_STRING Sddl;
     LONG DeviceIndex;
 
     DeviceIndex = InterlockedIncrement(&g_DeviceCounter);
     RtlStringCbPrintfW(DeviceNameBuffer, sizeof(DeviceNameBuffer), FPCIE_DEVICE_NAME_FORMAT, DeviceIndex);
     RtlInitUnicodeString(&DeviceName, DeviceNameBuffer);
 
-    Status = IoCreateDevice(
+    // FIX: Secure device creation to mitigate unprivileged access (LOLDrivers: FPCIE2COM.sys, 9543c507-9b10-4de8-89b9-42a4f24c99ec)
+    // SDDL: D:P(A;;GA;;;SY)(A;;GA;;;BA)
+    RtlInitUnicodeString(&Sddl, L"D:P(A;;GA;;;SY)(A;;GA;;;BA)");
+
+    Status = IoCreateDeviceSecure(
         DriverObject,
         sizeof(DEVICE_EXTENSION),
         &DeviceName,
         FPCIE_DEVICE_TYPE,
         FILE_DEVICE_SECURE_OPEN,
         FALSE,
+        &Sddl,
+        &GUID_DEVCLASS_FPCIE2COM,
         &DeviceObject
     );
 
@@ -245,6 +259,7 @@ NTSTATUS FpcieAddDevice(IN PDRIVER_OBJECT DriverObject, IN PDEVICE_OBJECT Physic
 
     DevExt->LowerDeviceObject = IoAttachDeviceToDeviceStack(DeviceObject, PhysicalDeviceObject);
     if (!DevExt->LowerDeviceObject) {
+        // FIX: Clean up device object on attach failure
         IoDeleteDevice(DeviceObject);
         return STATUS_DEVICE_NOT_CONNECTED;
     }
@@ -257,6 +272,12 @@ NTSTATUS FpcieAddDevice(IN PDRIVER_OBJECT DriverObject, IN PDEVICE_OBJECT Physic
         IoDeleteSymbolicLink(&SymlinkName);
         Status = IoCreateSymbolicLink(&SymlinkName, &DeviceName);
         if (!NT_SUCCESS(Status)) {
+            // FIX: Clean up lower stack attachment and device object on symbolic link failure
+            if (DevExt->LowerDeviceObject) {
+                IoDetachDevice(DevExt->LowerDeviceObject);
+                DevExt->LowerDeviceObject = NULL;
+            }
+            IoDeleteDevice(DeviceObject);
             return Status;
         }
     }
