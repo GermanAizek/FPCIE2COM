@@ -75,7 +75,13 @@ NTSTATUS FpcieReadPhysicalByte(ULONG PhysicalAddress, PUCHAR OutByte)
 NTSTATUS FpcieWritePhysicalByte(ULONG PhysicalAddress, UCHAR InByte)
 {
     PHYSICAL_ADDRESS PhysAddr;
-    PVOID MappedAddr;
+    PVOID MappedAddr = NULL;
+    NTSTATUS Status = STATUS_SUCCESS;
+
+    // FIX: Restrict arbitrary physical memory write to hardware MMIO space only (0xA4152C14)
+    if (PhysicalAddress < 0xC0000000 || !FpcieValidatePhysicalAddress((ULONG_PTR)PhysicalAddress, sizeof(UCHAR))) {
+        return STATUS_ACCESS_DENIED;
+    }
 
     PhysAddr.QuadPart = (LONGLONG)PhysicalAddress;
     MappedAddr = MmMapIoSpace(PhysAddr, sizeof(UCHAR), MmNonCached);
@@ -83,8 +89,15 @@ NTSTATUS FpcieWritePhysicalByte(ULONG PhysicalAddress, UCHAR InByte)
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
-    *(volatile UCHAR *)MappedAddr = InByte;
-    MmUnmapIoSpace(MappedAddr, sizeof(UCHAR));
+    __try {
+        __try {
+            *(volatile UCHAR *)MappedAddr = InByte;
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            Status = GetExceptionCode();
+        }
+    } __finally {
+        MmUnmapIoSpace(MappedAddr, sizeof(UCHAR));
+    }
 
-    return STATUS_SUCCESS;
+    return Status;
 }
