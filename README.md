@@ -18,17 +18,17 @@ Driver FPCIE2COM.sys allows adapter utility and serial communication software to
 
 Fixed vulnerabilities in opensource driver FPCIE2COM.sys:
 
-- [ ] (LOLDrivers: FPCIE2COM.sys)[https://www.loldrivers.io/drivers/9543c507-9b10-4de8-89b9-42a4f24c99ec/]
-  - Low-privilege users can map arbitrary physical memory for byte reads and writes, perform raw PCI configuration access through I/O ports 0xCF8 and 0xCFC, and control hardware controllers (BYOVD, MITRE ATT&CK T1068).
+- [x] (LOLDrivers: FPCIE2COM.sys)[https://www.loldrivers.io/drivers/9543c507-9b10-4de8-89b9-42a4f24c99ec/]
+  - Low-privilege users can map arbitrary physical memory for byte reads and writes, perform raw PCI configuration access through I/O ports 0xCF8 and 0xCFC, and control hardware controllers (BYOVD, MITRE ATT&CK T1068). Fixed by enforcing administrative ACLs on device creation.
 
 Fixed no publish vulnerabilities and bugs which contributors to this project found:
 
-- [ ] Device deletion bypassed on symbolic link deletion failure ([view code](main.c))
-- [ ] Arbitrary physical memory byte read in command 0xA4152C10 ([view code](mem.c))
-- [ ] Arbitrary physical memory byte write in command 0xA4152C14 ([view code](mem.c))
-- [ ] Unfiltered write to critical x86 I/O ports and controllers in commands 0xA4152C08, 0xA4152C0C ([view code](io.c))
-- [ ] Arbitrary PCI configuration space modification in commands 0xA4152C18, 0xA4152C1C ([view code](pci.c))
-- [ ] Device creation with weak permissions ([view code](main.c))
+- [x] Device deletion bypassed on symbolic link deletion failure ([view code](main.c))
+- [x] Arbitrary physical memory byte read in command 0xA4152C10 ([view code](mem.c))
+- [x] Arbitrary physical memory byte write in command 0xA4152C14 ([view code](mem.c))
+- [x] Unfiltered write to critical x86 I/O ports and controllers in commands 0xA4152C08, 0xA4152C0C ([view code](io.c))
+- [x] Arbitrary PCI configuration space modification in commands 0xA4152C18, 0xA4152C1C ([view code](pci.c))
+- [x] Device creation with weak permissions ([view code](main.c))
 
 Authors:
 
